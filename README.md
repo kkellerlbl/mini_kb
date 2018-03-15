@@ -3,7 +3,7 @@ Docker-compose configuration that brings up a mini-KBase
 
 Includes configurations for all of the services to setup a minimal test environment
 
-TL;DNR
+TL;DR
 ======
 
 1. Install docker-compose and its dependencies
@@ -12,7 +12,21 @@ TL;DNR
 1. run "start_minikb.sh"
 1. The mini-kb front proxy is now listening on port 8000. KBase services can be found under http://localhost:8000/services/{servicename}
 
-Structure of Docker Images
+Relationships between Mini-KBase and Release Process
+=================================
+
+The following diagram shows the relationship of Mini-KBase to the overall release engineering process flow.
+![KBase Release Build Workflow](images/Mini-KBase_flow.png)
+
+Mini-KBase vs Full KBase
+========================
+
+Mini-KBase is a work in progress, as of March 8, 2018, the images below show the mini-kbase services and the full KBase services for comparison. The full set of services available can always be found in the docker-compose.yml file.
+
+![Full KBase](images/FullKBaseEnvironment.png)
+![Mini KBase](images/Mini-KBase.png)
+
+Structure of KBase Environment Docker Images
 ==========================
 
 Docker images used for mini-kbase use a [modified version](https://github.com/kbase/dockerize) of [dockerize](https://github.com/jwilder/dockerize)
