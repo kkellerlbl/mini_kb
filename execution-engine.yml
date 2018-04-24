@@ -18,126 +18,83 @@ services:
     #  - /tmp/nginx.conf:/etc/nginx/nginx,conf
     ports:
       - "8000:80"
-    depends_on: ["auth", "handle_service", "handle_manager", "ws", "shock", "ujs", "njs"]
+    depends_on: ["auth", "handle_service", "handle_manager", "ws", "ujs", "njs"]
 
-  kbase-ui:
-    image: kbase/kbase-ui:develop
-    command:
-      - "-stdout"
-      - "/var/log/nginx/access.log"
-      - "-stderr"
-      - "/var/log/nginx/err.log"
-      - "-env"
-      - "https://raw.githubusercontent.com/kbase/mini_kb/master/deployment/conf/kbase-ui-minikb.ini"
-      - "-template"
-      - "/kb/deployment/conf/nginx.conf.tmpl:/etc/nginx/nginx.conf"
-      - "-template"
-      - "/kb/deployment/conf/config.json.tmpl:/kb/deployment/services/kbase-ui/modules/deploy/config.json"
-      - "nginx"
-    # Alternatively you can comment out the -env params to the container and use your local
-    # environment definitions with something like the following:
-    # environment:
-    #   - name=value
-    #   - name2=value2
-    #
-    # Or if you want to use a file:
-    #env_file:
-    #  - deployment/conf/kbase-ui-minikb.ini
-  search:
-    image: kbase/kb_search:latest
-    command:
-      - "-stdout"
-      - "/kb/deployment/jettybase/logs/request.log"
-      - "-env"
-      - "https://raw.githubusercontent.com/kbase/mini_kb/master/deployment/conf/search-minikb.ini"
-      - "-template"
-      - "/kb/deployment/conf/.templates/deployment.cfg.templ:/kb/deployment/conf/deployment.cfg"
-      - "-template"
-      - "/kb/deployment/conf/.templates/search_tools.cfg.templ:/kb/deployment/conf/search_tools.cfg"
-      - "-template"
-      - "/kb/deployment/conf/.templates/http.ini.templ:/kb/deployment/jettybase/start.d/http.ini"
-      - "-template"
-      - "/kb/deployment/conf/.templates/server.ini.templ:/kb/deployment/jettybase/start.d/server.ini"
-      - "-template"
-      - "/kb/deployment/conf/.templates/start_server.sh.templ:/kb/deployment/bin/start_server.sh"
-      - "-timeout"
-      - "120s"
-      - "-wait"
-      - "tcp://auth:8080"
-      - "-wait"
-      - "tcp://ws:8080"
-      - "-wait"
-      - "tcp://elastic:9200"
-      - "/kb/deployment/bin/entrypoint.sh"
-    depends_on: ["auth", "handle_service", "ws", "shock", "ujs", "nginx","elastic"]
-
-  coordinator:
-    image: kbase/kb_search:latest
-    command:
-      - "-env"
-      - "https://raw.githubusercontent.com/kbase/mini_kb/master/deployment/conf/search-minikb.ini"
-      - "-template"
-      - "/kb/deployment/conf/.templates/deployment.cfg.templ:/kb/deployment/conf/deployment.cfg"
-      - "-template"
-      - "/kb/deployment/conf/.templates/search_tools.cfg.templ:/kb/deployment/conf/search_tools.cfg"
-      - "/kb/deployment/bin/entrypoint.sh"
-      - "coordinator"
-    depends_on: ["auth", "handle_service", "ws", "shock", "ujs", "nginx", "ci-mongo"]
-
-  worker:
-    image: kbase/kb_search:latest
-    command:
-      - "-env"
-      - "https://raw.githubusercontent.com/kbase/mini_kb/master/deployment/conf/search-minikb.ini"
-      - "-template"
-      - "/kb/deployment/conf/.templates/deployment.cfg.templ:/kb/deployment/conf/deployment.cfg"
-      - "-template"
-      - "/kb/deployment/conf/.templates/search_tools.cfg.templ:/kb/deployment/conf/search_tools.cfg"
-      - "-timeout"
-      - "120s"
-      - "-wait"
-      - "tcp://auth:8080"
-      - "-wait"
-      - "tcp://ws:8080"
-      - "/kb/deployment/bin/entrypoint.sh"
-      - "worker"
-    depends_on: ["auth", "handle_service", "ws", "shock", "ujs", "nginx", "ci-mongo"]
-
-  logstash:
-    image: kbase/kb_logstash:latest
-    command:
-      - "-template"
-      - "/usr/share/logstash/.templates/10inputs.templ:/usr/share/logstash/pipeline/10inputs"
-      - "-template"
-      - "/usr/share/logstash/.templates/99outputs.templ:/usr/share/logstash/pipeline/99outputs"
-      - "-timeout"
-      - "120s"
-      - "-wait"
-      - "tcp://elastic:9200"
-      - "logstash"
-    ports:
-      - "9000:9000"
+  condor:
+    image: kbase/condor:latest
+    hostname: condor
     environment:
-      - "debug_output=1"
-      - "elastic_server=elastic:9200"
-    depends_on: ["elastic"]
-
-  elastic:
-    image: docker.elastic.co/elasticsearch/elasticsearch:5.6.5
+      - POOL_PASSWORD=weakpassword
+      - USE_TCP=True
     ports:
-      - "9200:9200"
-      - "9300:9300"
-    environment:
-      - xpack.security.enabled=false
-      - xpack.monitoring.enabled=false
-      - xpack.ml.enabled=false
-      - xpack.graph.enabled=false
-      - xpack.watcher.enabled=false
-      - discovery.type=single-node
-      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      - "9618:9618"
+    entrypoint:
+      - "/usr/bin/dockerize"
+    command:
+      - "-template"
+      - "/etc/condor/.templates/condor_config.local.templ:/etc/condor/condor_config.local"
+      - "-stdout"
+      - "/var/log/condor/MasterLog"
+      - "-stdout"
+      - "/var/log/condor/SchedLog"
+      - "/usr/sbin/start-condor.sh"
+      #- "sleep"
+      #- "36000"
+      
   
+  condor_worker_max:
+    image: kbase/kb_njs_wrapper:condor-cli
+    hostname: condor_worker_max
+    command:
+      - "-template"
+      - "/kb/deployment/conf/.templates/condor_config_worker.templ:/etc/condor/condor_config.local"
+      - "-template"
+      - "/kb/deployment/conf/.templates/shared_port_config.templ:/etc/condor/config.d/shared_port_config"
+      - "-timeout"
+      - "120s"
+      - "-stdout"
+      - "/var/log/condor/ProcLog"
+      - "-stdout"
+      - "/var/log/condor/StartLog"
+      - "/kb/deployment/bin/start-condor.sh"
+    depends_on: ["condor"]
+    environment:
+      - POOL_PASSWORD=weakpassword
+      - COLLECTOR_HOST=condor:9618?sock=collector
+      - NUM_SLOTS=1
+      - CLIENTGROUP="bigmem"
+      - USE_TCP=True
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock 
+      # The line below DOES NOT WORK FOR MacOS, but should uncommented for Unix hosts
+      # - /dev/log:/dev/log
+  condor_worker_mini:
+    image: kbase/kb_njs_wrapper:condor-cli
+    hostname: condor_worker_mini
+    command:
+      - "-template"
+      - "/kb/deployment/conf/.templates/condor_config_worker.templ:/etc/condor/condor_config.local"
+      - "-template"
+      - "/kb/deployment/conf/.templates/shared_port_config.templ:/etc/condor/config.d/shared_port_config"
+      - "-timeout"
+      - "120s"
+      - "-stdout"
+      - "/var/log/condor/ProcLog"
+      - "-stdout"
+      - "/var/log/condor/StartLog"
+      - "/kb/deployment/bin/start-condor.sh"
+    depends_on: ["condor"]
+    environment:
+      - POOL_PASSWORD=weakpassword
+      - COLLECTOR_HOST=condor:9618?sock=collector
+      - USE_TCP=True
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock 
+      # The line below DOES NOT WORK FOR MacOS, but should uncommented for Unix hosts
+      # - /dev/log:/dev/log
+
   njs:
-    image: kbase/kb_njs_wrapper:latest
+    image: kbase/kb_njs_wrapper:condor-cli
     command:
       - "-env"
       - "https://raw.githubusercontent.com/kbase/mini_kb/master/deployment/conf/njs-wrapper-minikb.ini"
@@ -149,6 +106,8 @@ services:
       - "/kb/deployment/conf/.templates/server.ini.templ:/kb/deployment/jettybase/start.d/server.ini"
       - "-template"
       - "/kb/deployment/conf/.templates/start_server.sh.templ:/kb/deployment/bin/start_server.sh"
+      - "-template"
+      - "/kb/deployment/conf/.templates/condor_config.templ:/etc/condor/condor_config.local"
       - "-timeout"
       - "120s"
       - "-wait"
@@ -164,7 +123,9 @@ services:
       - "-stdout"
       - "/kb/deployment/jettybase/logs/request.log"
       - "/kb/deployment/bin/start_server.sh"
-    depends_on: ["auth", "awe", "ws", "ci-mongo","db-init","ujs"]
+    depends_on: ["auth", "awe", "ws", "ci-mongo","db-init","ujs","condor"]
+    environment:
+      - POOL_PASSWORD=weakpassword
     # env_file: deployment/conf/njs-wrapper-minikb.ini
 
   ujs:
@@ -292,6 +253,25 @@ services:
     #  - "7109:7109"
     depends_on: ["handle_manager", "ci-mysql", "shock", "auth","db-init"]
 
+  handle_manager:
+    image: kbase/handle_mngr:develop
+    command:
+      - "-template"
+      - "/kb/deployment/conf/.templates/deployment.cfg.templ:/kb/deployment/conf/deployment.cfg"
+      - "-env"
+      - "https://raw.githubusercontent.com/kbase/mini_kb/master/deployment/conf/handle_mngr-minikb.ini"
+      - "-wait"
+      - "tcp://auth:8080"
+      - "-timeout"
+      - "120s"
+      - "starman"
+      - "--listen"
+      - ":8080"
+      - "/kb/deployment/lib/Bio/KBase/HandleMngr/HandleMngr.psgi"
+    #ports:
+    #  - "9001:9001"
+    depends_on: ["auth","db-init"]
+
   shock:
     image: kbase/kb_shock:develop
     command:
@@ -313,25 +293,6 @@ services:
     #ports:
     #  - "7044:7044"
     depends_on: ["ci-mongo", "db-init", "auth"]
-
-  handle_manager:
-    image: kbase/handle_mngr:develop
-    command:
-      - "-template"
-      - "/kb/deployment/conf/.templates/deployment.cfg.templ:/kb/deployment/conf/deployment.cfg"
-      - "-env"
-      - "https://raw.githubusercontent.com/kbase/mini_kb/master/deployment/conf/handle_mngr-minikb.ini"
-      - "-wait"
-      - "tcp://auth:8080"
-      - "-timeout"
-      - "120s"
-      - "starman"
-      - "--listen"
-      - ":8080"
-      - "/kb/deployment/lib/Bio/KBase/HandleMngr/HandleMngr.psgi"
-    #ports:
-    #  - "9001:9001"
-    depends_on: ["auth","db-init"]
 
   auth:
     image: kbase/kb_auth2:develop
